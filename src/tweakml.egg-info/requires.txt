@@ -1,6 +1,0 @@
-numpy
-
-[testing]
-pytest>=6.0
-pytest-cov>=2.0
-tox>=3.24
