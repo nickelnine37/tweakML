@@ -1,5 +1,5 @@
 import pytest
-from tweakml.graph import Node
+from tweakml.graph import Tweakable
 
 
 def test_Node():
