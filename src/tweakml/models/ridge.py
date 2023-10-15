@@ -1,11 +1,11 @@
-from tweakml.graph import node, Tweakable, Model
+from tweakml import node, Tweakable, Model
 import numpy as np
 
 
 class RidgeRegression(Model):
 
-    # X = Tweakable()
-    # y = Tweakable()
+    X = Tweakable()
+    y = Tweakable()
     alpha = Tweakable()
 
     def __init__(self, X: np.ndarray, y: np.ndarray, alpha: float):
@@ -59,24 +59,31 @@ if __name__ == '__main__':
     y = np.random.randn(N)
 
     alpha = 1
-    mod = RidgeRegression(X, y, alpha)
+    mod1 = RidgeRegression(X, y, alpha)
+    mod1.predict(X)
+    print(mod1.nodes)
 
-    mod.predict(X)
+    mod2 = RidgeRegression(X, y, alpha)
+    mod2.predict(X)
+    print(mod2.nodes)
 
-    for nd in mod.nodes:
-        print(nd)
-        print(f'\tChildren: {[child for child in nd.children]}')
-        print(f'\tParents: {[parent for parent in nd.parents]}')
 
-    mod.alpha = 2
-    print('\nSetting alpha\n')
-
-    for nd in mod.nodes:
-        print(nd)
-        print(f'\tChildren: {[child for child in nd.children]}')
-        print(f'\tParents: {[parent for parent in nd.parents]}')
-
-    mod.predict(X)
+    # mod.predict(X)
+    #
+    # for nd in mod.nodes:
+    #     print(nd)
+    #     print(f'\tChildren: {[child for child in nd.children]}')
+    #     print(f'\tParents: {[parent for parent in nd.parents]}')
+    #
+    # mod.alpha = 2
+    # print('\nSetting alpha\n')
+    #
+    # for nd in mod.nodes:
+    #     print(nd)
+    #     print(f'\tChildren: {[child for child in nd.children]}')
+    #     print(f'\tParents: {[parent for parent in nd.parents]}')
+    #
+    # mod.predict(X)
 
     #
     # pprint(mod.graph.nodes)
