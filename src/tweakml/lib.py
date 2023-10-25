@@ -1,6 +1,5 @@
-from functools import partial
-from collections import defaultdict
-from typing import Optional, Any, Type
+from typing import Optional, Any, Type, Callable
+from types import MethodType
 
 
 class Model:
@@ -8,21 +7,42 @@ class Model:
     Base Model class from which all models inherit from. This handles the node accounting logic.
     """
 
-    node_names = []  # list of node names for reference set at class level. Populated on __set__name__
+    # holds a list of nodes for the model. These are added in __set_name__ at each node
+    nodes: list['BaseNode'] = []
 
     def __init__(self):
-        self.nodes: list[BaseNode] = []        # list of tweakable and derived nodes
 
         # self.watch signifies which node we are currently watching to register subsequent calls against
         # begins as None and should end as None when the computation graph has complete
         self.watch: Optional[BaseNode] = None
 
-    def add_node(self, node: 'BaseNode') -> None:
-        """
-        Add a node to the model, either tweakable or a method node
-        """
-        if node not in self.nodes:
-            self.nodes.append(node)
+        # this holds the cached values at each node
+        self.values: dict[str, Any] = {}
+
+        # this tells us whether the node is cached or not
+        self.cached: dict[str, bool] = {}
+
+        # initialise values and cache statuses
+        for node in self.nodes:
+            self.uncache(node)
+            if isinstance(node, Tweakable):
+
+                def closure(node: 'Tweakable'):
+                    def tweak(value):
+                        node.__set__(self, value)
+                        return self
+
+                    return tweak
+
+                self.__dict__[f'set_{node.name}'] = closure(node)
+
+    def cache(self, node: 'BaseNode', value: Any):
+        self.values[node.name] = value
+        self.cached[node.name] = True
+
+    def uncache(self, node: 'BaseNode'):
+        self.values[node.name] = None
+        self.cached[node.name] = False
 
     def get_node(self, name: str) -> 'BaseNode':
         """
@@ -45,16 +65,16 @@ class CallListener:
     Context manager to listen for subsequent node calls
     """
 
-    def __init__(self, node: 'DerivedNode'):
+    def __init__(self, node: 'DerivedNode') -> None:
         self.node = node
         self.model_inst = node.model_inst
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         self.watch_init = self.model_inst.watch    # which node were we initially watching
         self.model_inst.register_call(self.node)   # register the fact that this derived node has been called
         self.model_inst.watch = self.node          # start watching the current node
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.model_inst.watch = self.watch_init   # set watch back to the original node
 
 
@@ -64,39 +84,29 @@ class BaseNode:
     """
 
     def __init__(self):
-        self.model_inst = None
         self.name: Optional[str] = None
-        self.cached: bool = False
-        self.value: Optional[Any] = None
         self.parents: list[BaseNode] = []
         self.children: list[BaseNode] = []
 
-    def uncache(self):
+    def uncache(self, model_inst: Model) -> None:
         """
-        Uncache this node, and all of its children
+        Uncache this node with respect to a model instance, and all of its children
         """
-        self.cached = False
-        self.value = None
+        model_inst.uncache(self)
         for child in self.children:
-            child.uncache()
-
-    def attach(self, model_inst: Model):
-        """
-        Attach this node to a model instance
-        """
-        if self.model_inst is None and model_inst is not None:
-            self.model_inst = model_inst
-            self.model_inst.nodes.append(self)
+            child.uncache(model_inst)
 
     def __set_name__(self, model_cls: Type[Model], name: str) -> None:
         """
-        When we call X = Tweakable(), save 'X' as the node name
+        When we call X = Tweakable(), or define use the @node decorator, name the resultant node
+        by the variable or decorated method name. Also add the node to the nodes list for the class.
+        This should run only once when the node class is defined.
         """
         self.name = name
-        model_cls.node_names.append(name)
+        model_cls.nodes.append(self)
 
-    def __repr__(self):
-        return f'Node({self.name}, cached={self.cached})'
+    def __repr__(self) -> str:
+        return f'Node({self.name})'
 
 
 class DerivedNode(BaseNode):
@@ -106,13 +116,16 @@ class DerivedNode(BaseNode):
 
     def __init__(self, func) -> None:
         super().__init__()
-        self.func = func
+        self.func: Callable = func
+        self.model_inst: Optional[Model] = None
 
-    def __get__(self, model_inst: Model, model_cls: Type[Model]) -> Any:
+    def __get__(self, model_inst: Model, model_cls: Type[Model]) -> 'DerivedNode':
         """
         Run whenever we access the method. Attach the node to the model if not already done
         """
-        self.attach(model_inst)
+        if model_inst is None:
+            raise ValueError('')
+        self.model_inst = model_inst
         return self
 
     def __call__(self, *args, **kwargs) -> Any:
@@ -123,11 +136,14 @@ class DerivedNode(BaseNode):
 
         with CallListener(self):
 
-            if not self.cached:
-                self.value = self.func(self.model_inst, *args, **kwargs)
+            if not self.model_inst.cached[self.name]:
+                value = self.func(self.model_inst, *args, **kwargs)
+                self.model_inst.cache(self, value)
+            else:
+                value = self.model_inst.values[self.name]
 
-        self.cached = True
-        return self.value
+        self.model_inst = None
+        return value
 
 
 class Tweakable(BaseNode):
@@ -137,29 +153,26 @@ class Tweakable(BaseNode):
 
     def __init__(self):
         super().__init__()
-        self.value = None
 
     def __get__(self, model_inst: Model, model_cls: Type[Model]) -> Any:
         """
         Run whenever we access the value at a node. Attach the node to the model instance, register a call
         and return the cached value
         """
-        self.attach(model_inst)
-        self.model_inst.register_call(self)
-        if self.cached:
-            return self.value
+        model_inst.register_call(self)
+        if model_inst.cached[self.name]:
+            return model_inst.values[self.name]
         else:
             raise AttributeError(f'The value at node {self.name} has not been set')
 
-    def __set__(self, model: Model, value: Any) -> None:
+    def __set__(self, model_inst: Model, value: Any) -> None:
         """
         When the value at a Tweakable node is set, cache the new value, and uncache the value at all child nodes
         as they will need to be recomputed
         """
-        self.value = value
-        self.cached = True
+        model_inst.cache(self, value)
         for child in self.children:
-            child.uncache()
+            child.uncache(model_inst)
 
 
 def node(func) -> DerivedNode:

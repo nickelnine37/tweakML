@@ -8,17 +8,18 @@ Many machine learning and statistical models can be understood as a pipeline tha
 
 ## Example: Ridge Regression
 
-Consider the example of ridge regression. Let's say we have a feature matrix $\mathbf{X} \in \R^
-{N \times M}$ and an observed target vector $\mathbf{y} \in \R^{N}$. In addition, we have a  parameter $\alpha$ which provides regularisation. The optimum coefficient vector $\mathbf{w} \in \R^{M}$, which we write as a function of $\alpha$, is given by 
-$$
-\mathbf{w}(\alpha) = \left( \mathbf{X}^\top \mathbf{X} + \alpha \mathbf{I}\right)^{-1} \mathbf{X}^\top 
-\mathbf{y}
-$$
+Consider the example of ridge regression. Let's say we have a feature matrix $\mathbf{X} \in 
+\mathbb{R}^{N \times M}$ and an observed target vector $\mathbf{y} \in \mathbb{R}^{N}$. In addition, we 
+have a  parameter $\alpha$ which provides regularisation. The optimum coefficient vector $\mathbf
+{w} \in \mathbb{R}^{M}$, which we write as a function of $\alpha$, is given by 
+
+$$\mathbf{w}(\alpha) = \left( \mathbf{X}^\top \mathbf{X} + \alpha \mathbf{I}\right)^{-1} \mathbf{X}^\top 
+\mathbf{y}$$
 
 The predicted output, $\bar{\mathbf{y}}$, on a validation set $\bar{\mathbf{X}}$ would then by given 
-$$
-\bar{\mathbf{y}} = \bar{\mathbf{X}} \mathbf{w}(\alpha)
-$$
+
+$$\bar{\mathbf{y}} = \bar{\mathbf{X}} \mathbf{w}(\alpha)$$
+
 We could build a simple model for this as follows 
 
 ```python 
@@ -74,7 +75,7 @@ class RidgeRegression:
     def XTX(self):
         return self.X.T @ self.X
     
-   	def XTy(self):
+    def XTy(self):
         return self.X.T @ self.y
     
     def alphaI(self):
@@ -118,7 +119,7 @@ class RidgeRegression(Model):
         self.y = y
         self.alpha = alpha
     
-	@node    
+    @node    
     def XTX(self):
         return self.X.T @ self.X
     

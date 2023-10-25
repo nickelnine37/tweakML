@@ -60,12 +60,18 @@ if __name__ == '__main__':
 
     alpha = 1
     mod1 = RidgeRegression(X, y, alpha)
+
+    print(mod1.w)
     mod1.predict(X)
     print(mod1.nodes)
 
-    mod2 = RidgeRegression(X, y, alpha)
-    mod2.predict(X)
-    print(mod2.nodes)
+    mod1.set_alpha(3)
+
+    print(mod1.values)
+
+    # mod2 = RidgeRegression(X, y, alpha)
+    # mod2.predict(X)
+    # print(mod2.nodes)
 
 
     # mod.predict(X)

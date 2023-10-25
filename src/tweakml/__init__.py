@@ -1,1 +1,1 @@
-from tweakml.tweakml import node, Tweakable, Model
+from tweakml.lib import node, Tweakable, Model
