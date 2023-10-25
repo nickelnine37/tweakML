@@ -56,8 +56,7 @@ model = RidgeRegression(X, y, 0.1)
 err = []
 for alpha in np.linspace(0.01, 1, 50):
     model.alpha = alpha
-	err.append(((model.predict(X_) - y_) ** 2).sum())    
-
+    err.append(((model.predict(X_) - y_) ** 2).sum())
 ```
 
 The problem here is that, when we change the value of `alpha`, we need to recompute the value of `w` from scratch. 
@@ -104,8 +103,10 @@ XTy --> w
 
 Note that, if `alpha` is changed, there is no need to recompute `XTX` or `XTy`. Only the nodes downstream of `alpha`, i.e. `alphaI`, and `w` and need to be recomputed. TweakML handles this automatically as follows: 
 
+# Building a tweakML Model
+
 ```python
-from tweakml import Model, node, Tweakale
+from tweakml import Model, node, Tweakable
 
 class RidgeRegression(Model):
     
@@ -153,6 +154,6 @@ model = RidgeRegression(X, y, 0.1)
 err = []
 for alpha in np.linspace(0.01, 1, 50):
     model.alpha = alpha
-	err.append(((model.predict(X_) - y_) ** 2).sum()) 
+    err.append(((model.predict(X_) - y_) ** 2).sum()) 
 ```
 
