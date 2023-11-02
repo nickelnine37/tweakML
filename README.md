@@ -5,25 +5,25 @@ mathematical models. Typically, models of this nature can be understood as a lar
 function mapping inputs (data, hyperparameters etc.) to outputs (weights, predictions, error 
 scores etc.). A common task is to change one or more the inputs to see 
 the effect on the output. This often requires recomputing the whole model from scratch or 
-complex accounting to keep track of what parts of the model need recomputing and what don't. 
+complex accounting to keep track of which parts of the model need recomputing and which don't. 
 
 TweakML is designed to silently handle this process by automatically building a 
-model dependency graph. That way, when an input is changed, the output can be recomputed in a 
-way that is maximally efficient without having to 
+model dependency graph. That way, when an input is changed, an output can be recomputed in a 
+way that is maximally efficient without having to keep track of internal model dependencies. 
 
 ## Example: Ridge Regression
 
 Consider the example of ridge regression where we have a feature matrix $\mathbf{X} \in 
 \mathbb{R}^{N \times M}$ and an observed target vector $\mathbf{y} \in \mathbb{R}^{N}$. In addition, we 
 have a  parameter $\alpha$ which provides regularisation. The coefficient vector $\mathbf
-{w} \in \mathbb{R}^{M}$, which we write as a function of $\alpha$, is given by 
+{w} \in \mathbb{R}^{M}$ is given by 
 
-$$\mathbf{w}(\alpha) = \left( \mathbf{X}^\top \mathbf{X} + \alpha \mathbf{I}\right)^{-1} \mathbf{X}^\top 
+$$\mathbf{w} = \left( \mathbf{X}^\top \mathbf{X} + \alpha \mathbf{I}\right)^{-1} \mathbf{X}^\top 
 \mathbf{y}$$
 
-The predicted output, $\bar{\mathbf{y}}$, on a validation set $\bar{\mathbf{X}}$ would then by given 
+The predicted output, $\mathbf{y}'$, on a validation set $\mathbf{X}'$ would in turn be given 
 
-$$\bar{\mathbf{y}} = \bar{\mathbf{X}} \mathbf{w}(\alpha)$$
+$$\mathbf{y}' = \mathbf{X}' \mathbf{w}$$
 
 A python implementation of this might look something like this. 
 
@@ -57,15 +57,16 @@ graph TD
 X --> XTX
 X --> XTy
 X --> I
-alpha --> alpha * I
-I --> alpha * I
+alpha --> alpha*I
+I --> alpha*I
 y --> XTy
-alpha * I --> w
+alpha*I --> w
 XTX --> w
 XTy --> w
 ```
 
-If `alpha` is changed, there is no need to recompute `XTX` or `XTy` - only the nodes downstream of 
+If `alpha` is changed, there is no need to recompute `I`, `XTX` or `XTy` - only the nodes 
+downstream of 
 `alpha` need to be recomputed. 
 
 # Building a tweakML Model
@@ -109,6 +110,9 @@ class RidgeRegression(Model):
     
     def predict(self, X_):
         return X_ @ self.w()
+
+    def error(self, X_, y_):
+        return ((self.predict(X_) - y_) ** 2).sum()
 ```
 
 As visible, there are three key steps to making a tweakML model: 
@@ -124,7 +128,8 @@ model = RidgeRegression(X, y, 0.1)
 
 err = []
 for alpha in np.linspace(0.01, 1, 50):
+    # reset alpha - everything downstream automatically uncached
     model.alpha = alpha
-    err.append(((model.predict(X_) - y_) ** 2).sum()) 
+    err.append(model.error(X_, y_)) 
 ```
 
