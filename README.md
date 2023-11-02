@@ -133,3 +133,10 @@ for alpha in np.linspace(0.01, 1, 50):
     err.append(model.error(X_, y_)) 
 ```
 
+## Installation 
+
+For now install manually by navigating into the `tweakML` directory and running 
+
+```
+pip install .
+```
