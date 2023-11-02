@@ -1,16 +1,21 @@
 # tweakML
 
-A python library for defining machine learning and statistical models, which builds a dependency graph and uses smart caching under the hood to allow for input parameters to be efficiently tweaked.
+TweakML is a python library for building custom machine learning, statistical and general 
+mathematical models. Typically, models of this nature can be understood as a large 
+function mapping inputs (data, hyperparameters etc.) to outputs (weights, predictions, error 
+scores etc.). A common task is to change one or more the inputs to see 
+the effect on the output. This often requires recomputing the whole model from scratch or 
+complex accounting to keep track of what parts of the model need recomputing and what don't. 
 
-## Motivation
-
-Many machine learning and statistical models can be understood as a pipeline that map input variables and hyperparameters to an output prediction or solution. But what happens when one or more of these variables is changed? This is situation is common when, for example, searching for the optimum hyperparameter value over a validation set or testing the solution's robustness to noise in the input data. The simplest solution is to recompute the whole model from scratch, however, this can be computationally expensive for large datasets or complex models. Often, much of the computational work can be cached, meaning it is only necessary to recompute a small part of the model, which can bring large computational savings. TweakML is designed to automatically build a model dependency graph, such that when one input  parameter is changed, only the necessary parts of the model are recomputed.
+TweakML is designed to silently handle this process by automatically building a 
+model dependency graph. That way, when an input is changed, the output can be recomputed in a 
+way that is maximally efficient without having to 
 
 ## Example: Ridge Regression
 
-Consider the example of ridge regression. Let's say we have a feature matrix $\mathbf{X} \in 
+Consider the example of ridge regression where we have a feature matrix $\mathbf{X} \in 
 \mathbb{R}^{N \times M}$ and an observed target vector $\mathbf{y} \in \mathbb{R}^{N}$. In addition, we 
-have a  parameter $\alpha$ which provides regularisation. The optimum coefficient vector $\mathbf
+have a  parameter $\alpha$ which provides regularisation. The coefficient vector $\mathbf
 {w} \in \mathbb{R}^{M}$, which we write as a function of $\alpha$, is given by 
 
 $$\mathbf{w}(\alpha) = \left( \mathbf{X}^\top \mathbf{X} + \alpha \mathbf{I}\right)^{-1} \mathbf{X}^\top 
@@ -20,7 +25,7 @@ The predicted output, $\bar{\mathbf{y}}$, on a validation set $\bar{\mathbf{X}}$
 
 $$\bar{\mathbf{y}} = \bar{\mathbf{X}} \mathbf{w}(\alpha)$$
 
-We could build a simple model for this as follows 
+A python implementation of this might look something like this. 
 
 ```python 
 import numpy as np
@@ -33,77 +38,39 @@ class RidgeRegression:
         self.alpha = alpha
         
     def w(self):
-        return np.linalg.solve(self.X.T @ self.X + self.alpha * np.eye(self.X.shape[1]), self.X.T @ self.y)
+        XTX = self.X.T @ self.X 
+        XTy = self.X.T @ self.y
+        I = np.eye(self.X.shape[1]) 
+        return np.linalg.solve(XTX + self.alpha * I, XTy)
     
     def predict(self, X_):
         return X_ @ self.w()
 ```
 
-Checking the prediction error over a validation set might look something like this:
+Note that if we change $\alpha$, there is no need to recompute $\mathbf{X}^\top \mathbf{X}$ or $\mathbf{X}^\top 
+\mathbf{y}$
 
-```python 
-from sklearn.model_selection import train_test_split
-
-N = 100
-M = 5
-X_all = np.random.randn(N, M)
-y_all = np.random.randn(N)
-
-X, X_, y, y_ = train_test_split(X_all, y_all, test_size=0.3)
-
-model = RidgeRegression(X, y, 0.1)
-
-err = []
-for alpha in np.linspace(0.01, 1, 50):
-    model.alpha = alpha
-    err.append(((model.predict(X_) - y_) ** 2).sum())
-```
-
-The problem here is that, when we change the value of `alpha`, we need to recompute the value of `w` from scratch. 
-
-To solve this problem, first let's break the computation of `w`  up into steps. 
-
-```python 
-class RidgeRegression:
-    
-    def __init__(self, X, y, alpha):
-        self.X = X
-        self.y = y
-        self.alpha = alpha
-        
-    def XTX(self):
-        return self.X.T @ self.X
-    
-    def XTy(self):
-        return self.X.T @ self.y
-    
-    def alphaI(self):
-        return self.alpha * np.eye(self.X.shape[1])
-        
-    def w(self):
-        return np.linalg.solve(self.XTX() + self.alphaI(), self.XTy())
-    
-    def predict(self, X_):
-        return X_ @ self.w()
-```
-
-In this way, the computation of `w` can be visualised as a dependency graph. 
+Note how the computation of `w` can be visualised as a dependency graph. 
 
 ```mermaid
 graph TD
 X --> XTX
 X --> XTy
-alpha --> alphaI
-X --> alphaI
+X --> I
+alpha --> alpha * I
+I --> alpha * I
 y --> XTy
-alphaI --> w
+alpha * I --> w
 XTX --> w
 XTy --> w
 ```
 
-Note that, if `alpha` is changed, there is no need to recompute `XTX` or `XTy`. Only the nodes downstream of `alpha`, i.e. `alphaI`, and `w` and need to be recomputed. TweakML handles this automatically as follows: 
+If `alpha` is changed, there is no need to recompute `XTX` or `XTy` - only the nodes downstream of 
+`alpha` need to be recomputed. 
 
 # Building a tweakML Model
+
+TweakML handles this automatically as follows. 
 
 ```python
 from tweakml import Model, node, Tweakable
@@ -128,9 +95,13 @@ class RidgeRegression(Model):
     def XTy(self):
         return self.X.T @ self.y
     
+    @node 
+    def I(self):
+        return np.eye(self.X.shape[1])
+    
     @node
     def alphaI(self):
-        return self.alpha * np.eye(self.X.shape[1])
+        return self.alpha * self.I()
 	
     @node
     def w(self):
