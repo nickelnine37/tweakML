@@ -1,15 +1,26 @@
 # tweakML
 
 TweakML is a python library for building custom machine learning, statistical and general 
-mathematical models. Typically, models of this nature can be understood as a large 
+mathematical models. Models of this nature can often be understood as a large 
 function mapping inputs (data, hyperparameters etc.) to outputs (weights, predictions, error 
 scores etc.). A common task is to change one or more the inputs to see 
-the effect on the output. This often requires recomputing the whole model from scratch or 
+the effect on the output. This often requires running the whole model from scratch or 
 complex accounting to keep track of which parts of the model need recomputing and which don't. 
 
-TweakML is designed to silently handle this process by automatically building a 
-model dependency graph. That way, when an input is changed, an output can be recomputed in a 
-way that is maximally efficient without having to keep track of internal model dependencies. 
+TweakML aims to overcome this issue by automatically keeping track of the internal model 
+dependencies. Under the hood, the model gets described by a directed acyclic graph, with each 
+node represents an intermediate calculation that is cached after running for the first time. 
+Then, when one or more of the inputs is changed, only nodes downstream of the change are marked 
+for recomputation. This can bring large savings in terms of computational workload. 
+
+## Installation 
+
+For now install manually by navigating into the `tweakML` directory and running 
+
+```
+pip install .
+```
+
 
 ## Example: Ridge Regression
 
@@ -41,37 +52,38 @@ class RidgeRegression:
         XTX = self.X.T @ self.X 
         XTy = self.X.T @ self.y
         I = np.eye(self.X.shape[1]) 
-        return np.linalg.solve(XTX + self.alpha * I, XTy)
+        alphaI = self.alpha * I
+        w = np.linalg.solve(XTX + alphaI, XTy)
+        return w
     
     def predict(self, X_):
         return X_ @ self.w()
 ```
 
-Note that if we change $\alpha$, there is no need to recompute $\mathbf{X}^\top \mathbf{X}$ or $\mathbf{X}^\top 
-\mathbf{y}$
-
 Note how the computation of `w` can be visualised as a dependency graph. 
 
 ```mermaid
+%%{init: {"fontFamily": "monospace"} }%%
 graph TD
-X --> XTX
-X --> XTy
-X --> I
-alpha --> alpha*I
-I --> alpha*I
-y --> XTy
-alpha*I --> w
+self.X --> XTX
+self.X --> XTy
+self.X --> I
+self.alpha --> alphaI
+I --> alphaI
+self.y --> XTy
+alphaI --> w
 XTX --> w
 XTy --> w
 ```
 
-If `alpha` is changed, there is no need to recompute `I`, `XTX` or `XTy` - only the nodes 
-downstream of 
-`alpha` need to be recomputed. 
+If `self.alpha` is changed, there is no need to recompute `I`, `XTX` or `XTy`. Similarly, 
+changing `self.y` means only `XTy` and `w` need recomputing. Only changes to `self.X` require 
+the full model to be run again. 
 
 # Building a tweakML Model
 
-TweakML handles this automatically as follows. 
+TweakML can be used to automatically build this dependency graph. Simply label the input 
+variables and mark each step in the computational process. 
 
 ```python
 from tweakml import Model, node, Tweakable
@@ -133,10 +145,3 @@ for alpha in np.linspace(0.01, 1, 50):
     err.append(model.error(X_, y_)) 
 ```
 
-## Installation 
-
-For now install manually by navigating into the `tweakML` directory and running 
-
-```
-pip install .
-```
